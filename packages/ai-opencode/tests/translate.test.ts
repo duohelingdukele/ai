@@ -173,6 +173,33 @@ describe('translateOpencodeStream', () => {
     expect(contents[1]).toMatchObject({ delta: 'lo', content: 'Hello' })
   })
 
+  it('buffers deltas from cumulative snapshots until the message role is known', async () => {
+    const snapshots = ['The', 'The answer', 'The answer is', 'The answer is 42']
+    const chunks = await collect([
+      session,
+      ...snapshots.map((snapshot) => textPart('part-1', snapshot)),
+      {
+        kind: 'event',
+        event: {
+          type: 'message.updated',
+          properties: {
+            info: { id: 'msg-1', sessionID: 'sess-1', role: 'assistant' },
+          },
+        },
+      },
+      done(),
+    ])
+    const contents = chunks.filter((c) => c.type === 'TEXT_MESSAGE_CONTENT')
+
+    expect(contents.map((chunk) => chunk.delta)).toEqual([
+      'The',
+      ' answer',
+      ' is',
+      ' 42',
+    ])
+    expect(contents.at(-1)).toMatchObject({ content: 'The answer is 42' })
+  })
+
   it('reports usage with cache and reasoning details', async () => {
     const chunks = await collect([
       session,
